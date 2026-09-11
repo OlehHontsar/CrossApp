@@ -15,5 +15,6 @@ Console.WriteLine($"RID (визначено)      : {report.DetectedRid}");
 Console.WriteLine($"RID (від .NET)       : {report.ReportedRid}"); 
 Console.WriteLine($"Каталог застосунку   : {report.BaseDirectory}"); 
 Console.WriteLine($"Поточний каталог     : {report.CurrentDirectory}"); 
-Console.WriteLine(new string('-', 52)); 
+Console.WriteLine($"Примітка збірки (TFM): {report.BuildNote}"); // ДОДАНО
+Console.WriteLine(new string('-', 52));
 Console.WriteLine("Предметна область: Замовлення (Customer, Product, Order, OrderLine)");
