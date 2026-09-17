@@ -2,7 +2,14 @@ using System.Collections.Generic;
 
 namespace Core.Dto;
 
-// Позиційний рекорд товару, адаптований під ваш домен "Замовлення" та "Склад"
+// Спільний інтерфейс для поліморфної обробки різнорідних даних домену
+public interface IDomainDto 
+{ 
+    string Id { get; } 
+    string Name { get; } 
+}
+
+// Імутабельний рекорд товару (сумісний із CSV-варіантом «Склад» та JSON)
 public record ProductDto(
     string Id, 
     string Sku, 
@@ -10,7 +17,19 @@ public record ProductDto(
     string Unit, 
     int Quantity, 
     string? Note = null
-);
+) : IDomainDto;
 
-// Узагальнений контейнер результату відмовостійкого імпорту
-public sealed record ImportResult<T>(IReadOnlyList<T> Items, IReadOnlyList<string> Errors);
+// Новий рекорд складу, доданий у межах поліморфного розбору
+public record WarehouseDto(
+    string Id, 
+    string Sku, 
+    string Name, 
+    string Location, 
+    int Capacity
+) : IDomainDto;
+
+// Універсальний узагальнений контейнер для відмовостійкої передачі результатів
+public sealed record ImportResult<T>(
+    IReadOnlyList<T> Items, 
+    IReadOnlyList<string> Errors
+);

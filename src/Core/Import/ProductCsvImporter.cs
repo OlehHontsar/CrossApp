@@ -9,21 +9,24 @@ public static class ProductCsvImporter
 { 
     private const char Separator = ';'; 
 
-    public static ImportResult<ProductDto> Load(string path) 
+    public static ImportResult<IDomainDto> Load(string path) 
     { 
-        var items = new List<ProductDto>(); 
+        var items = new List<IDomainDto>(); 
         var errors = new List<string>(); 
-        string[] lines = File.ReadAllLines(path); 
+        // Явно кажемо .NET зчитувати файл як UTF-8, ігноруючи системну локаль Windows
+        string[] lines = File.ReadAllLines(path, System.Text.Encoding.UTF8);
+
 
         for (int i = 0; i < lines.Length; i++) 
         { 
             int number = i + 1; 
             string line = lines[i].Trim(); 
 
-            if (string.IsNullOrWhiteSpace(line)) 
+            // Пропускаємо порожні рядки та текстові коментарі
+            if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#')) 
                 continue; 
 
-            // Пропуск першого рядка, якщо це заголовок стовпців
+            // Безпечний пропуск рядка технічних заголовків стовпців
             if (number == 1 && line.StartsWith("id", StringComparison.OrdinalIgnoreCase)) 
                 continue;                       
 
@@ -37,7 +40,7 @@ public static class ProductCsvImporter
                     break; 
             } 
         } 
-        return new ImportResult<ProductDto>(items, errors); 
+        return new ImportResult<IDomainDto>(items, errors); 
     } 
 
     private static ParseOutcome ParseLine(string line) 
@@ -46,27 +49,34 @@ public static class ProductCsvImporter
 
         return parts switch 
         { 
-            // 1. Патерн властивості для перевірки недостатньої кількості колонок
-            { Length: < 5 } => new ParseFailed($"очікую 5 колонок, отримав {parts.Length}"), 
+            // 1. Патерн властивості: перевірка на критично невірну кількість стовпців у рядку
+            { Length: < 6 } => new ParseFailed($"очікую 5 колонок, отримав {parts.Length - 1}"), 
 
-            // 2. Списковий патерн для перевірки порожніх полів SKU або Назви
-            [_, "", _, _, _] or [_, _, "", _, _] => new ParseFailed("SKU або назва порожні"), 
+            // 2. Патерн списку з фільтром when: валідація та збір ТОВАРУ за префіксом маркера типу "P"
+            [var id, "P", var sku, var name, var unit, var qty] when !string.IsNullOrWhiteSpace(sku) && !string.IsNullOrWhiteSpace(name) => 
+                int.TryParse(qty, out int q) && q >= 0 
+                    ? new ParseOk(new ProductDto(id, sku, name, unit, q))
+                    : new ParseFailed($"кількість '{qty}' не є невід'ємним числом"),
 
-            // 3. Патерн списку з guard-виразом when для перевірки типу int та його знаку
-            [_, _, _, _, var qty] when !int.TryParse(qty, out int q) || q < 0 
-                => new ParseFailed($"кількість '{qty}' не є невід'ємним числом"), 
+            // 3. Патерн списку з фільтром when: валідація та збір СКЛАДУ за префіксом маркера типу "W"
+            [var id, "W", var sku, var name, var location, var capStr] when !string.IsNullOrWhiteSpace(sku) && !string.IsNullOrWhiteSpace(name) => 
+                int.TryParse(capStr, out int c) && c >= 0 
+                    ? new ParseOk(new WarehouseDto(id, sku, name, location, c))
+                    : new ParseFailed($"місткість складу '{capStr}' не є числом"),
 
-            // 4. Патерн списку для успішного збору об'єкта
-            [var id, var sku, var name, var unit, var qty] 
-                => new ParseOk(new ProductDto(id, sku, name, unit, int.Parse(qty))), 
+            // 4. Логічні та позиційні патерни: перевірка на пусті обов'язкові поля SKU або назви сутності
+            [_, "P", "", _, _, _] or [_, "P", _, "", _, _] => new ParseFailed("SKU або назва порожні"),
+            [_, "W", "", _, _, _] or [_, "W", _, "", _, _] => new ParseFailed("SKU або назва складу порожні"),
 
-            // 5. Дефолтний патерн для обробки надлишкових колонок
-            _ => new ParseFailed($"занадто багато колонок: {parts.Length}") 
+            // 5. Поліморфний патерн зрізу: обробка помилки при невідомому типі маркера всередині структури
+            [_, var type, ..] => new ParseFailed($"невідомий тип префіксу сутності: '{type}'"),
+            
+            // 6. Дефолтний патерн
+            _ => new ParseFailed($"невідома конфігурація структури: {parts.Length} колонок") 
         }; 
     } 
 
-    // Внутрішня ієрархія для повернення результатів парсингу рядка
     private abstract record ParseOutcome; 
-    private sealed record ParseOk(ProductDto Value) : ParseOutcome; 
+    private sealed record ParseOk(IDomainDto Value) : ParseOutcome; 
     private sealed record ParseFailed(string Reason) : ParseOutcome; 
 }

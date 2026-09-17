@@ -1,0 +1,5 @@
+﻿[
+  { "id": "P-101", "sku": "SKU-101", "name": "Шпатель 150мм", "unit": "шт", "quantity": 25 },
+  { "id": "P-102", "sku": "SKU-102", "name": "Валик малярний", "unit": "шт", "quantity": 40 },
+  { "id": "W-101", "sku": "WH-SOUTH", "name": "Південний філіал", "location": "Одеса", "capacity": 500 }
+]
