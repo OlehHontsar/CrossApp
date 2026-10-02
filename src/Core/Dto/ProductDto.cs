@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Core.Dto;
 
 // Спільний інтерфейс для поліморфної обробки різнорідних даних домену
@@ -19,7 +17,7 @@ public record ProductDto(
     string? Note = null
 ) : IDomainDto;
 
-// Новий рекорд складу, доданий у межах поліморфного розбору
+// ПОВЕРТАЄМО НА МІСЦЕ: Новий рекорд складу, який шукають ваші імпортери
 public record WarehouseDto(
     string Id, 
     string Sku, 
@@ -27,9 +25,3 @@ public record WarehouseDto(
     string Location, 
     int Capacity
 ) : IDomainDto;
-
-// Універсальний узагальнений контейнер для відмовостійкої передачі результатів
-public sealed record ImportResult<T>(
-    IReadOnlyList<T> Items, 
-    IReadOnlyList<string> Errors
-);

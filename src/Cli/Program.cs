@@ -1,35 +1,12 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
-using Core;
 using Core.Dto;
 using Core.Import;
+using Core.Domain; 
 
 // ====================================================
-// 📊 ШАР ЛАБОРАТОРНОЇ РОБОТИ №2: СИСТЕМНИЙ ЗВІТ
-// ====================================================
-EnvironmentReport envReport = EnvironmentInfo.Collect(); 
-
-Console.WriteLine("====================================================");
-Console.WriteLine("CrossApp – інформація про середовище (Лабораторна 2)"); 
-Console.WriteLine("====================================================");
-Console.WriteLine("Студент: Гонцар Олег, група ФЕІ-33");
-Console.WriteLine($"ОС (OSDescription)   : {envReport.OsDescription}"); 
-Console.WriteLine($"ОС (Environment)     : {envReport.OsVersion}"); 
-Console.WriteLine($"Архітектура процесу  : {envReport.ProcessArchitecture}"); 
-Console.WriteLine($"Версія .NET (CLR)    : {envReport.ClrVersion}"); 
-Console.WriteLine($"Runtime              : {envReport.FrameworkDescription}"); 
-Console.WriteLine($"RID (визначено)      : {envReport.DetectedRid}"); 
-Console.WriteLine($"RID (від .NET)       : {envReport.ReportedRid}"); 
-Console.WriteLine($"Каталог застосунку   : {envReport.BaseDirectory}"); 
-Console.WriteLine($"Поточний каталог     : {envReport.CurrentDirectory}"); 
-Console.WriteLine($"Примітка збірки (TFM): {envReport.BuildNote}");
-Console.WriteLine(new string('-', 52)); 
-Console.WriteLine("Предметна область: Замовлення (Customer, Product, Order, OrderLine)");
-Console.WriteLine("====================================================\n");
-
-// ====================================================
-// 📂 ШАР ЛАБОРАТОРНОЇ РОБОТИ №3: ВІДМОВОСТІЙКИЙ ІМПОРТ
+// 📊 ШАР ЛАБОРАТОРНОЇ РОБОТИ №2 та №3 (Ваш відмовостійкий імпорт)
 // ====================================================
 string path = args.Length > 0 ? args[0] : Path.Combine("data", "sample.csv"); 
 
@@ -41,7 +18,6 @@ if (!File.Exists(path))
 
 string extension = Path.GetExtension(path).ToLower();
 
-// ДОДАТКОВЕ ЗАВДАННЯ 1: Вибір стратегії імпорту за розширенням файлу через switch expression
 ImportResult<IDomainDto> result = extension switch
 {
     ".csv" => ProductCsvImporter.Load(path),
@@ -49,36 +25,75 @@ ImportResult<IDomainDto> result = extension switch
     _ => throw new InvalidOperationException($"Непідтримуване розширення файлу: '{extension}'")
 };
 
-Console.WriteLine($"Завантажено записів: {result.Items.Count}"); 
+Console.WriteLine($"[ЛР3] Успішно завантажено DTO-записів з файлу: {result.Items.Count}"); 
 
-// ДОДАТКОВЕ ЗАВДАННЯ 2: Роздільне табличне відображення різнорідних сутностей через Pattern Matching
-foreach (IDomainDto p in result.Items.Take(5)) 
+// ====================================================
+// 🧩 ШАР ЛАБОРАТОРНОЇ РОБОТИ №4 (Доменна модель та інваріанти)
+// ====================================================
+Console.WriteLine("\n====================================================");
+Console.WriteLine("Лабораторна робота №4: Тестування доменних інваріантів");
+Console.WriteLine("====================================================");
+
+// ЗВ'ЯЗОК ТИЖНІВ: Пробуємо перетворити завантажені DTO на доменні сутності через FromDto
+Console.WriteLine("\n--- Крок 1: Конвертація DTO-записів у сутності домену ---");
+int validEntitiesCount = 0;
+int domainErrorsCount = 0;
+
+foreach (IDomainDto dto in result.Items)
 {
-    switch (p)
+    // Оскільки FromDto приймає лише ProductDto, фільтруємо через pattern matching
+    if (dto is ProductDto prodDto)
     {
-        case ProductDto prod:
-            Console.WriteLine($"  {prod.Id,-6} {prod.Sku,-10} {prod.Name,-26} {prod.Quantity,5} {prod.Unit}");
-            break;
-        case WarehouseDto wh:
-            Console.WriteLine($"  {wh.Id,-6} {wh.Sku,-10} {wh.Name,-26} {wh.Capacity,5} {wh.Location}");
-            break;
+        try
+        {
+            // Метод FromDto автоматично запустить Create() та перевірить усі інваріанти!
+            Product domainProd = Product.FromDto(prodDto);
+            validEntitiesCount++;
+        }
+        catch (Exception ex)
+        {
+            domainErrorsCount++;
+            Console.WriteLine($"  ! Бізнес-помилка для ID {prodDto.Id}: {ex.Message}");
+        }
+    }
+}
+Console.WriteLine($"Результат: Створено валідних сутностей: {validEntitiesCount}, відхилено інваріантами: {domainErrorsCount}");
+
+
+// ДЕМОНСТРАЦІЯ СЦЕНАРІЇВ СТРОГО ЗА МЕТОДИЧКОЮ
+Console.WriteLine("\n=== Сценарій 1: успіх ===");
+try
+{
+    Product product = Product.Create("P-001", "sku-001", "Цемент М400 25кг", "шт", 100);
+    Console.WriteLine(product);
+    product.RegisterArrival(50);
+    product.Issue(30);
+    Console.WriteLine(product);
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Помилка: {ex.Message}");
+}
+
+Console.WriteLine("\n=== Сценарій 2: порушення інваріантів ===");
+// Локальний метод демонстрації відмов без падіння програми
+static void TryDo(string title, Action action)
+{
+    try
+    {
+        action();
+        Console.WriteLine($" {title}: виняток НЕ спрацював — інваріант відсутній!");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($" {title}: {ex.GetType().Name} — {ex.Message}");
     }
 }
 
-// Виведення списку пропущених рядків із номерами
-if (result.Errors.Count > 0) 
-{ 
-    Console.WriteLine($"Пропущено рядків: {result.Errors.Count}"); 
-    foreach (string e in result.Errors) 
-        Console.WriteLine($"  ! {e}"); 
-} 
-
-// ДОДАТКОВЕ ЗАВДАННЯ 3: Розрахунок аналітичної статистики одним фінальним рядком
-int totalRows = result.Items.Count + result.Errors.Count;
-double errorRate = totalRows > 0 ? ((double)result.Errors.Count / totalRows) * 100 : 0;
-
-Console.WriteLine(new string('=', 52));
-Console.WriteLine($"СТАТИСТИКА ІМПОРТУ: Усього: {totalRows} | Прийнято: {result.Items.Count} | Пропущено: {result.Errors.Count} | % помилок: {errorRate:F1}%");
-Console.WriteLine("====================================================");
+// Тестуємо інваріанти на свіжому об'єкті
+Product testProduct = Product.Create("P-001", "SKU-001", "Цемент М400 25кг", "шт", 120);
+TryDo("видача більша за залишок", () => testProduct.Issue(1000));
+TryDo("порожній SKU", () => Product.Create("P-002", " ", "Пісок", "т", 10));
+TryDo("від'ємний залишок", () => Product.Create("P-003", "SKU-003", "Цегла", "шт", -5));
 
 return 0;
