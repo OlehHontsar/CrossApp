@@ -37,14 +37,14 @@ CrossApp/
 │   ├── sample.csv           # Поліморфні вхідні дані (товари P; та склади W;)
 │   └── sample.json          # Паралельний – під другий імпортер
 ├── logs/
-│   └── app.log              # НОВЕ (Лаб 6): Автоматично створюваний файл логів подій
+│   └── app.log              # Автоматично створюваний файл логів подій (ЛР6)
 ├── CrossApp.slnx            # Сучасний файл рішення XML-формату
 ├── README.md
 └── src/
     ├── Core/
     │   ├── Core.csproj      # Конфігурація Multi-targeting (<TargetFrameworks>net8.0;net10.0</TargetFrameworks>)
     │   ├── EnvironmentInfo.cs
-    │   ├── SampleData.cs    # Початковий набір даних для InMemory сховища
+    │   ├── SampleData.cs    # Розширено до 15-20 записів для звітів (ЛР7)[cite: 6, 9]
     │   ├── Abstractions/    # Контракти та інтерфейси сховищ
     │   │   └── ICatalogStore.cs
     │   ├── Dto/             # Розділені транспортні рекорди даних
@@ -52,9 +52,13 @@ CrossApp/
     │   │   └── ProductDto.cs
     │   ├── Domain/          # Чиста бізнес-поведінка та захист доменного стану
     │   │   └── Product.cs
-    │   ├── Events/          # НОВЕ (Лаб 6): Доменні події та типи змін
+    │   ├── Events/          # Доменні події та типи змін (ЛР6)
     │   │   ├── CatalogChangedEventArgs.cs
     │   │   └── CatalogChangeKind.cs
+    │   ├── Reports/         # НОВЕ (Лаб 7): Транспортні рекорди звітів та сервіс LINQ[cite: 6]
+    │   │   ├── GroupSummary.cs
+    │   │   ├── ReportService.cs
+    │   │   └── StockLine.cs
     │   ├── Import/
     │   │   ├── ProductCsvImporter.cs
     │   │   └── ProductJsonImporter.cs
@@ -65,7 +69,7 @@ CrossApp/
     │       └── InMemoryCatalogStore.cs
     └── Cli/
         ├── Cli.csproj       # Посилання ProjectReference на Core
-        └── Program.cs       # Composition Root (ручний DI), події, лямбди та сценарії
+        └── Program.cs       # Composition Root (ручний DI), підкоманди звітів та демо відкладеного виконання[cite: 6, 9]
 ```
 
 ### Результати порівняння конфігурацій публікації (Лаб 2)
@@ -129,3 +133,40 @@ CrossApp/
    - **Перший підписник:** локальний метод `OnCatalogChanged`, який форматує повідомлення та паралельно виводить його в консоль і дописує у файл `logs/app.log` (каталог створюється динамічно через `Directory.CreateDirectory`).
    - **Другий підписник:** лямбда-вираз із замиканням над зовнішньою змінною-лічильником (`changes`), що демонструє синхронне виконання обробників у порядку підписки.
    - **Тестування відписки (`-=`) та інваріантів:** продемонстровано припинення логування після відписки конкретного обробника, а також відсутність генерації подій при відмовах бізнес-логіки.
+
+   ---
+
+   ## Лабораторна робота № 7: Звіти через LINQ (LINQ to Objects)
+
+### 1. Реалізовані DTO та сервіси
+- **DTOs (`src/Core/Reports/`)**:
+  - `StockLine` (`record`): представлення товару у звітах (`Sku`, `Name`, `Quantity`, `Unit`).
+  - `GroupSummary` (`record`): результати групування (`Key`, `Count`, `TotalQuantity`).
+- **`ReportService` (`src/Core/Reports/ReportService.cs`)**:
+  - `TopByQuantity(source, n)` — Топ-N товарів за залишком зі стабільним другим ключем сортування (`ThenBy`).
+  - `LowStock(source, threshold)` — фільтрація товарів, дефіцит яких менший за поріг.
+  - `ByUnit(source)` — групування товарів за одиницею виміру (`GroupBy`) з підрахунком суми та кількості.
+  - `Totals(source)` — агрегатні обчислення (`Count`, `Sum`, `Average`, `Max`) з безпечною обробкою порожніх колекцій.
+
+---
+
+### 2. Доступні CLI-команди для запуску звітів
+
+Запуск звітів здійснюється через передачу аргументів у CLI:
+
+```bash
+# 1. Топ-5 товарів за залишком (команда за замовчуванням)
+dotnet run --project src/Cli -- report-top
+
+# 2. Дефіцитні товари (залишок < 10)
+dotnet run --project src/Cli -- report-low
+
+# 3. Групування за одиницями виміру
+dotnet run --project src/Cli -- report-groups
+
+# 4. Підсумкові агрегати (загальна кількість, сума, середнє, максимум)
+dotnet run --project src/Cli -- report-sum
+
+# 5. Демонстрація відкладеного виконання LINQ
+dotnet run --project src/Cli -- demo-deferred
+```
