@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Core.Abstractions;
 using Core.Domain;
 using Core.Events;
@@ -11,10 +13,8 @@ public sealed class CatalogService(ICatalogStore store)
 {
     private readonly ICatalogStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
-    // Оголошення події за стандартами .NET (.NET event з використанням EventHandler<T>)[cite: 3, 5]
     public event EventHandler<CatalogChangedEventArgs>? Changed;
 
-    // Безпечне підняття події через оператор ?.Invoke[cite: 3, 5]
     private void OnChanged(Product p, CatalogChangeKind kind, int delta) =>
         Changed?.Invoke(this, new CatalogChangedEventArgs(p.Id, kind, delta, p.Quantity));
 
@@ -23,7 +23,6 @@ public sealed class CatalogService(ICatalogStore store)
         var product = Product.Create(Guid.NewGuid().ToString("N")[..8], sku, name, unit, quantity);
         _store.Add(product);
         
-        // Подія викликається після успішного додавання[cite: 5]
         OnChanged(product, CatalogChangeKind.Added, quantity); 
         return product;
     }
@@ -33,11 +32,9 @@ public sealed class CatalogService(ICatalogStore store)
         var product = _store.GetById(id) 
             ?? throw new InvalidOperationException($"Немає запису з id={id}.");
         
-        // Якщо інваріант RegisterArrival кине виняток, рядок нижче не виконається, і подія не підніметься[cite: 5]
         product.RegisterArrival(quantity);
         _store.Update(product);
         
-        // Подія викликається після успішної зміни стану[cite: 5]
         OnChanged(product, CatalogChangeKind.Received, quantity);
     }
 
@@ -45,7 +42,24 @@ public sealed class CatalogService(ICatalogStore store)
 
     public Product? Find(string id) => _store.GetById(id);
 
-    // Використання делегата Func для фільтрації (коли потрібен результат, а не просте сповіщення)[cite: 3, 5, 7]
     public IReadOnlyList<Product> FindAll(Func<Product, bool> predicate) =>
         _store.List().Where(predicate).ToList();
+
+    public async Task<int> ImportAsync(ICatalogImporter importer, string path, CancellationToken ct = default)
+    {
+        var items = await importer.LoadAsync(path, ct);
+        var added = 0;
+        
+        foreach (var item in items)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (_store.GetById(item.Id) is not null) continue;
+            
+            _store.Add(item);
+            OnChanged(item, CatalogChangeKind.Added, item.Quantity);
+            added++;
+        }
+        
+        return added;
+    }
 }
