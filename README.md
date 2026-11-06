@@ -34,42 +34,49 @@ dotnet run --project src/Cli data/sample.json
 ```text
 CrossApp/
 ├── data/
+│   ├── catalog.json         # Актуальний файл даних для імпорту та перевірки CLI
+│   ├── large_catalog.json   # Файл для тестування тривалого імпорту / кооперативного скасування
 │   ├── sample.csv           # Поліморфні вхідні дані (товари P; та склади W;)
 │   └── sample.json          # Паралельний – під другий імпортер
 ├── logs/
 │   └── app.log              # Автоматично створюваний файл логів подій (ЛР6)
 ├── CrossApp.slnx            # Сучасний файл рішення XML-формату
-├── README.md
+├── README.md                # Інструкції з запуску тестів та перевірки скасування через Ctrl+C (ЛР8)
 └── src/
     ├── Core/
-    │   ├── Core.csproj      # Конфігурація Multi-targeting (<TargetFrameworks>net8.0;net10.0</TargetFrameworks>)
+    │   ├── Core.csproj      # Конфігурація проєкту бібліотеки (.NET 10.0)
     │   ├── EnvironmentInfo.cs
-    │   ├── SampleData.cs    # Розширено до 15-20 записів для звітів (ЛР7)[cite: 6, 9]
-    │   ├── Abstractions/    # Контракти та інтерфейси сховищ
+    │   ├── SampleData.cs    # Детерміновані ізольовані дані для тестів і сервісів
+    │   ├── Abstractions/    # Контракти та інтерфейси сховищ та імпортерів (ЛР8: асинхронні сигнатури)
+    │   │   ├── ICatalogImporter.cs
     │   │   └── ICatalogStore.cs
     │   ├── Dto/             # Розділені транспортні рекорди даних
     │   │   ├── ImportResult.cs
     │   │   └── ProductDto.cs
-    │   ├── Domain/          # Чиста бізнес-поведінка та захист доменного стану
+    │   ├── Domain/          # Чиста бізнес-поведінка, захист інваріантів та DomainException (ЛР8)
+    │   │   ├── DomainException.cs
     │   │   └── Product.cs
     │   ├── Events/          # Доменні події та типи змін (ЛР6)
     │   │   ├── CatalogChangedEventArgs.cs
     │   │   └── CatalogChangeKind.cs
-    │   ├── Reports/         # НОВЕ (Лаб 7): Транспортні рекорди звітів та сервіс LINQ[cite: 6]
+    │   ├── Reports/         # Транспортні рекорди звітів та сервіс LINQ (ЛР7)
     │   │   ├── GroupSummary.cs
     │   │   ├── ReportService.cs
     │   │   └── StockLine.cs
-    │   ├── Import/
-    │   │   ├── ProductCsvImporter.cs
-    │   │   └── ProductJsonImporter.cs
-    │   ├── Services/        # Сервісний бізнес-шар
+    │   ├── Import/          # Асинхронні імпортери з FileStream та CancellationToken (ЛР8)
+    │   │   ├── JsonCatalogImporter.cs
+    │   │   └── ProductCsvImporter.cs
+    │   ├── Services/        # Сервісний бізнес-шар із реалізацією ImportAsync (ЛР8)
     │   │   └── CatalogService.cs
     │   └── Storage/         # Альтернативні реалізації сховищ даних
     │       ├── FileCatalogStore.cs
     │       └── InMemoryCatalogStore.cs
+    ├── Core.Tests/          # НОВЕ (Лаб 8): Ізольований проєкт модульних тестів (xUnit)
+    │   ├── Core.Tests.csproj  # Посилання на Core, xUnit, Coverlet тощо
+    │   └── UnitTests.cs     # Комплексні тести домену, звітів, інваріантів та бізнес-логіки
     └── Cli/
-        ├── Cli.csproj       # Посилання ProjectReference на Core
-        └── Program.cs       # Composition Root (ручний DI), підкоманди звітів та демо відкладеного виконання[cite: 6, 9]
+        ├── Cli.csproj       # Посилання ProjectReference на Core + налаштування автокопіювання data/
+        └── Program.cs       # Composition Root з асинхронним викликом імпорту, Ctrl+C та обробкою винятків (ЛР8)
 ```
 
 ### Результати порівняння конфігурацій публікації (Лаб 2)
@@ -170,3 +177,25 @@ dotnet run --project src/Cli -- report-sum
 # 5. Демонстрація відкладеного виконання LINQ
 dotnet run --project src/Cli -- demo-deferred
 ```
+---
+
+## Лабораторна робота № 8: Асинхронне введення-виведення та скасування (Async/Await & CancellationToken)
+
+### 1. Реалізований функціонал
+- **Асинхронний імпорт (`src/Core/Import/JsonCatalogImporter.cs`)**:
+  - Реалізовано асинхронне зчитування та десеріалізацію через `FileStream` (`useAsync: true`) та `JsonSerializer.DeserializeAsync`.
+- **Кооперативне скасування (`CancellationToken`)**:
+  - Інтегровано підтримку скасування асинхронних пайплайнів та обробку сигналу `Ctrl + C` у Composition Root (`Cli/Program.cs`).
+- **Доменні винятки (`src/Core/Domain/DomainException.cs`)**:
+  - Створено спеціалізований виняток для контрольованого перехоплення бізнес-помилок без генерації системних стектрейсів.
+- **Модульні тести (`src/Core.Tests/`)**:
+  - Створено ізольований тестовий проєкт на базі xUnit, що покриває доменну логіку, інваріанти, події та звіти (всього **9 успішних тестів**).
+
+---
+
+### 2. Як запустити тести й перевірити скасування
+
+#### А. Запуск модульних тестів (xUnit)
+Для перевірки всієї бізнес-логіки, інваріантів та роботи звітів виконайте в терміналі:
+```bash
+dotnet test
