@@ -68,15 +68,18 @@ CrossApp/
     │   │   └── ProductCsvImporter.cs
     │   ├── Services/        # Сервісний бізнес-шар із реалізацією ImportAsync (ЛР8)
     │   │   └── CatalogService.cs
+    │   ├── Configuration/   # НОВЕ (Лаб 9): Додаткові класи конфігурації / опцій
+    │   │   └── StorageOptions.cs
     │   └── Storage/         # Альтернативні реалізації сховищ даних
     │       ├── FileCatalogStore.cs
     │       └── InMemoryCatalogStore.cs
-    ├── Core.Tests/          # НОВЕ (Лаб 8): Ізольований проєкт модульних тестів (xUnit)
-    │   ├── Core.Tests.csproj  # Посилання на Core, xUnit, Coverlet тощо
+    ├── Core.Tests/          # Ізольований проєкт модульних тестів (xUnit)
+    │   ├── Core.Tests.csproj # Посилання на Core, xUnit, Coverlet тощо
     │   └── UnitTests.cs     # Комплексні тести домену, звітів, інваріантів та бізнес-логіки
     └── Cli/
-        ├── Cli.csproj       # Посилання ProjectReference на Core + налаштування автокопіювання data/
-        └── Program.cs       # Composition Root з асинхронним викликом імпорту, Ctrl+C та обробкою винятків (ЛР8)
+        ├── Cli.csproj       # Посилання ProjectReference на Core + автокопіювання data/
+        ├── appsettings.json # Базова конфігурація в репозиторії (без секретів)
+        └── Program.cs       # Composition Root: конфігурація, ієрархія, user-secrets, асинхронний виклик, Ctrl+C та обробка винятків (ЛР9)
 ```
 
 ### Результати порівняння конфігурацій публікації (Лаб 2)
@@ -193,9 +196,17 @@ dotnet run --project src/Cli -- demo-deferred
 
 ---
 
+### Лабораторна робота № 9: Конфігурація додатків, ієрархія джерел та User Secrets
+- **Ієрархія джерел конфігурації**: `appsettings.json` (дефолти) $\rightarrow$ Змінні середовища (`CROSSAPP_*`) $\rightarrow$ Аргументи командного рядка (найвищий пріоритет).
+- **Ізоляція секретів (`dotnet user-secrets`)**: Чутливі дані (`Integration:ApiKey`) винесені у захищене системне сховище ОС, а сам файл `appsettings.json` у репозиторії залишається чистим від секретів.
+- **Шляхо-незалежність**: Використання `AppContext.BaseDirectory` для стабільного пошуку файлів незалежно від поточної робочої директорії термінала.
+
+---
+
 ### 2. Як запустити тести й перевірити скасування
 
 #### А. Запуск модульних тестів (xUnit)
 Для перевірки всієї бізнес-логіки, інваріантів та роботи звітів виконайте в терміналі:
 ```bash
 dotnet test
+
